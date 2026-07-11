@@ -5,3 +5,7 @@ apscheduler
 requests
 python-dotenv
 PyPDF2
+fastapi
+uvicorn[standard]
+asyncpg
+psycopg2-binary

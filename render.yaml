@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: careerlens-backend
+    env: python
+    region: frankfurt
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "alembic upgrade head && uvicorn app:app --host 0.0.0.0 --port $PORT"
+    rootDir: backend
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_FRONTEND_URL
+        sync: false
+      - key: JSEARCH_KEY
+        sync: false
+      - key: RAPIDAPI_KEY
+        sync: false
+
+  - type: web
+    name: careerlens-frontend
+    env: node
+    region: frankfurt
+    buildCommand: "npm install && npm run build"
+    startCommand: "npm run start"
+    rootDir: frontend
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        sync: false

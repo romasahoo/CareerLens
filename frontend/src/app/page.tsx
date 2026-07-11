@@ -105,7 +105,8 @@ function PageContent() {
     setLoading(true);
     setError(null);
     try {
-      const url = `http://127.0.0.1:8000/api/jobs?q=${encodeURIComponent(q)}&location=&remote_only=false`;
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+      const url = `${baseUrl}/api/jobs?q=${encodeURIComponent(q)}&location=&remote_only=false`;
       const res = await fetch(url);
       if (!res.ok) throw new Error("API error");
       setAllJobs(await res.json());
@@ -140,7 +141,8 @@ function PageContent() {
   const handleScrape = async () => {
     setScraping(true);
     try {
-      await fetch("http://127.0.0.1:8000/api/scrape", { method: "POST" });
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+      await fetch(`${baseUrl}/api/scrape`, { method: "POST" });
       await fetchJobs(searchQuery);
     } catch {
       // scrape error — silently ignore, fetchJobs will handle backend errors

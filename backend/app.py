@@ -23,9 +23,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 # Allow Next.js frontend to access API
+frontend_url = os.environ.get("NEXT_PUBLIC_FRONTEND_URL")
+origins = ["*"] if not frontend_url else [frontend_url, "http://localhost:3000", "http://127.0.0.1:3000"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
