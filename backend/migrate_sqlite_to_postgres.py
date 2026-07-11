@@ -14,10 +14,10 @@ async def main():
     SqliteSession = async_sessionmaker(sqlite_engine, expire_on_commit=False)
 
     # 2. Connect to remote Postgres
-    pg_url = os.environ.get("SUPABASE_DATABASE_URL")
+    pg_url = os.environ.get("REMOTE_DATABASE_URL")
     if not pg_url:
-        print("Please set SUPABASE_DATABASE_URL in .env (or export it) pointing to your new Supabase Postgres database.")
-        print("Example: postgres://postgres.[project-ref]:[password]@aws-0-eu-central-1.pooler.supabase.com:6543/postgres")
+        print("Please set REMOTE_DATABASE_URL in .env (or export it) pointing to your new Postgres database.")
+        print("Example: postgres://user:password@ep-cool-db-1234.eu-central-1.aws.neon.tech/neondb")
         return
         
     if pg_url.startswith("postgres://"):
