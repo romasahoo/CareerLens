@@ -1,0 +1,7 @@
+sqlalchemy[asyncio]
+aiosqlite
+alembic
+apscheduler
+requests
+python-dotenv
+PyPDF2

@@ -1,0 +1,11 @@
+node_modules/
+.next/
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+careerlens.db
+venv/
+env/
+.DS_Store

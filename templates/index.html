@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CareerLens</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <h1>🚀 CareerLens</h1>
+            </div>
+            
+            <div class="settings-group">
+                <h3>⚙️ Integrations</h3>
+                <p>Securely configure your API access.</p>
+                
+                <div class="input-group">
+                    <label for="rapidapi-key">RapidAPI Key (JSearch)</label>
+                    <input type="password" id="rapidapi-key" placeholder="Enter Key">
+                </div>
+                
+                <div class="input-group">
+                    <label for="gemini-key">Gemini API Key</label>
+                    <input type="password" id="gemini-key" placeholder="Enter Key">
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header>
+                <h2>Unlock your career potential.</h2>
+                <p>Upload your CV and let AI find your perfect match.</p>
+            </header>
+
+            <!-- Upload Section -->
+            <section class="upload-section glass-panel" id="upload-panel">
+                <h3>1. Upload Resume</h3>
+                <form id="upload-form">
+                    <div class="file-drop-area">
+                        <span class="file-msg">Drag & drop your PDF resume here, or click to browse</span>
+                        <input class="file-input" type="file" id="resume-file" accept="application/pdf" required>
+                    </div>
+                    <button type="submit" class="btn primary-btn" id="analyze-btn">🚀 Analyze Profile</button>
+                </form>
+                <div id="loading-spinner" class="hidden">
+                    <div class="spinner"></div>
+                    <p>Decoding your career DNA...</p>
+                </div>
+                <div id="error-msg" class="error hidden"></div>
+            </section>
+
+            <!-- Results Section (Hidden initially) -->
+            <section class="results-section hidden" id="results-panel">
+                <div class="profile-summary glass-panel">
+                    <h3>2. Your AI Profile</h3>
+                    <div class="metrics">
+                        <div class="metric">
+                            <span class="metric-label">Experience</span>
+                            <span class="metric-value" id="exp-val">0 Yrs</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Primary Role</span>
+                            <span class="metric-value" id="role-val">Professional</span>
+                        </div>
+                    </div>
+                    <h4>Core Skills</h4>
+                    <div class="skills-container" id="skills-container"></div>
+                </div>
+
+                <div class="job-search glass-panel">
+                    <h3>3. Find Matches</h3>
+                    <div class="search-bar">
+                        <input type="text" id="search-query" placeholder="Refine Search Query">
+                        <button id="search-btn" class="btn primary-btn">🔍 Search Jobs</button>
+                    </div>
+                    <div id="job-loading" class="hidden">
+                        <div class="spinner"></div>
+                        <p>Scouring the web for opportunities...</p>
+                    </div>
+                    <div id="job-error" class="error hidden"></div>
+                </div>
+                
+                <!-- Job Cards Container -->
+                <div class="jobs-grid" id="jobs-grid"></div>
+            </section>
+        </main>
+    </div>
+    <script src="/static/script.js"></script>
+</body>
+</html>

@@ -1,0 +1,485 @@
+"use client";
+import { useState, useEffect, useCallback } from "react";
+import { SlidersHorizontal, ChevronDown, Search, X } from "lucide-react";
+
+import { ThemeProvider, useTheme } from "@/components/ThemeContext";
+import Navbar from "@/components/Navbar";
+import FilterSidebar, { Filters, EMPTY_FILTERS } from "@/components/FilterSidebar";
+import JobCard, { Job, JobCardSkeleton } from "@/components/JobCard";
+import RightSidebar from "@/components/RightSidebar";
+import JobDetailPanel from "@/components/JobDetailPanel";
+import MobileNav from "@/components/MobileNav";
+
+type SortOption = "Newest" | "Relevance" | "Company A–Z";
+const SORT_OPTIONS: SortOption[] = ["Newest", "Relevance", "Company A–Z"];
+
+function sortJobs(jobs: Job[], sort: SortOption): Job[] {
+  if (sort === "Newest") return [...jobs].sort((a, b) => new Date(b.posted_date || 0).getTime() - new Date(a.posted_date || 0).getTime());
+  if (sort === "Company A–Z") return [...jobs].sort((a, b) => (a.company || "").localeCompare(b.company || ""));
+  return jobs;
+}
+
+function applyFilters(jobs: Job[], filters: Filters, query: string): Job[] {
+  let out = jobs;
+
+  // Text search
+  if (query.trim()) {
+    const q = query.toLowerCase();
+    out = out.filter(j =>
+      j.title.toLowerCase().includes(q) ||
+      (j.company || "").toLowerCase().includes(q) ||
+      (j.location || "").toLowerCase().includes(q)
+    );
+  }
+
+  // Location filter
+  if (filters.locations.length > 0) {
+    out = out.filter(j => {
+      const loc = (j.location || "").toLowerCase();
+      return filters.locations.some(l => {
+        if (l === "Remote") return j.remote;
+        if (l === "Munich") return loc.includes("munich") || loc.includes("münchen");
+        if (l === "Berlin") return loc.includes("berlin");
+        if (l === "Hybrid") return loc.includes("hybrid");
+        if (l === "Germany") return loc.includes("german");
+        return loc.includes(l.toLowerCase());
+      });
+    });
+  }
+
+  // Source filter
+  if (filters.sources.length > 0) {
+    out = out.filter(j => filters.sources.some(s => {
+      const src = (j.source || "").toLowerCase();
+      const filterSrc = s.toLowerCase();
+      // For RapidAPI match only the first word
+      if (filterSrc.startsWith("rapidapi")) return src.includes("rapidapi") || src.includes("active jobs");
+      return src.includes(filterSrc.split(" ")[0]);
+    }));
+  }
+
+  // Employment type
+  if (filters.types.length > 0) {
+    out = out.filter(j =>
+      filters.types.some(t => (j.job_type || "Full-time").toLowerCase().includes(t.toLowerCase().split("-")[0]))
+    );
+  }
+
+  // Language filter — "English Only" removes jobs from non-English sources
+  if (filters.language.includes("English Only")) {
+    const NON_ENGLISH_SOURCES = ["xing", "stepstone"];
+    const GERMAN_WORDS = ["entwickler", "ingenieur", "vollzeit", "teilzeit", "(m/w/d)", "(w/m/d)", "für", "mit "];
+    out = out.filter(j => {
+      const src = (j.source || "").toLowerCase();
+      if (NON_ENGLISH_SOURCES.some(s => src.includes(s))) return false;
+      const title = (j.title || "").toLowerCase();
+      if (GERMAN_WORDS.some(w => title.includes(w))) return false;
+      return true;
+    });
+  }
+
+  return out;
+}
+
+function PageContent() {
+  const { theme } = useTheme();
+  const dark = theme === "dark";
+
+  const [allJobs, setAllJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [pendingQuery, setPendingQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [sort, setSort] = useState<SortOption>("Newest");
+  const [sortOpen, setSortOpen] = useState(false);
+
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [bookmarks, setBookmarks] = useState<Set<number>>(new Set());
+  const [recentlyViewed, setRecentlyViewed] = useState<Job[]>([]);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [scraping, setScraping] = useState(false);
+
+  const fetchJobs = useCallback(async (q = "") => {
+    setLoading(true);
+    setError(null);
+    try {
+      const url = `http://127.0.0.1:8000/api/jobs?q=${encodeURIComponent(q)}&location=&remote_only=false`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("API error");
+      setAllJobs(await res.json());
+    } catch {
+      setError("Cannot connect to backend on port 8000. Make sure it's running.");
+      setAllJobs([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchJobs(""); }, [fetchJobs]);
+
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem("cl-bookmarks");
+      if (s) setBookmarks(new Set(JSON.parse(s)));
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") setSelectedJob(null); };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, []);
+
+  const handleSearch = () => {
+    setSearchQuery(pendingQuery);
+    fetchJobs(pendingQuery);
+  };
+
+  const handleScrape = async () => {
+    setScraping(true);
+    try {
+      await fetch("http://127.0.0.1:8000/api/scrape", { method: "POST" });
+      await fetchJobs(searchQuery);
+    } catch {
+      // scrape error — silently ignore, fetchJobs will handle backend errors
+    } finally {
+      setScraping(false);
+    }
+  };
+
+  const toggleBookmark = (id: number) => {
+    setBookmarks(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      localStorage.setItem("cl-bookmarks", JSON.stringify([...next]));
+      return next;
+    });
+  };
+
+  const openJob = (job: Job) => {
+    setSelectedJob(job);
+    setRecentlyViewed(prev => [job, ...prev.filter(j => j.id !== job.id)].slice(0, 5));
+  };
+
+  const visibleJobs = sortJobs(applyFilters(allJobs, filters, searchQuery), sort);
+  const similarJobs = selectedJob ? allJobs.filter(j => j.id !== selectedJob.id).slice(0, 5) : [];
+
+  const bg = dark ? "#0A1120" : "#F0F2F8";
+  const surface = dark ? "#111827" : "#FFFFFF";
+  const border = dark ? "#1F2D45" : "#E4E8F0";
+  const text1 = dark ? "#E2E8F0" : "#0F172A";
+  const text3 = dark ? "#4B5563" : "#94A3B8";
+
+  return (
+    <div style={{ minHeight: "100vh", background: bg }}>
+      <Navbar
+        searchQuery={pendingQuery}
+        onSearchChange={setPendingQuery}
+        onSearchSubmit={handleSearch}
+      />
+
+      {/* ── 3-col layout ─────────────────────────────────── */}
+      <div style={{
+        maxWidth: 1440,
+        margin: "0 auto",
+        padding: "28px 24px 100px",
+        display: "grid",
+        gridTemplateColumns: "256px 1fr 272px",
+        gap: 22,
+        alignItems: "start",
+      }} id="main-grid">
+
+        {/* Left sidebar — self-scrolling aside handles overflow */}
+        <div style={{ position: "sticky", top: 84 }} id="left-sidebar">
+          <FilterSidebar
+            filters={filters}
+            onChange={setFilters}
+            onApply={handleSearch}
+          />
+        </div>
+
+        {/* Center: job list */}
+        <main aria-label="Job listings">
+          {/* Toolbar */}
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            marginBottom: 18, gap: 12, flexWrap: "wrap",
+          }}>
+            {/* Mobile filter btn */}
+            <button
+              id="mobile-filter-btn"
+              onClick={() => setDrawerOpen(true)}
+              aria-label="Open filters"
+              style={{
+                display: "none",
+                alignItems: "center", gap: 6,
+                padding: "8px 14px", borderRadius: 9,
+                background: surface, border: `1.5px solid ${border}`,
+                color: dark ? "#94A3B8" : "#475569",
+                fontWeight: 600, fontSize: 13, fontFamily: "inherit", cursor: "pointer",
+              }}
+            >
+              <SlidersHorizontal size={15} /> Filters
+            </button>
+
+            {/* Job count + Refresh */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div>
+                <h1 style={{ fontWeight: 800, fontSize: 18, color: text1, margin: 0, letterSpacing: "-0.02em" }}>
+                  {loading
+                    ? <span style={{ color: text3 }}>Loading…</span>
+                    : <><span style={{ color: "#2563EB" }}>{visibleJobs.length}</span> {visibleJobs.length === 1 ? "Job" : "Jobs"} Found</>
+                  }
+                </h1>
+                {!loading && allJobs.length > 0 && (
+                  <p style={{ fontSize: 12, color: text3, margin: "2px 0 0" }}>
+                    From {new Set(allJobs.map(j => j.source)).size} sources
+                  </p>
+                )}
+              </div>
+              <button
+                id="refresh-jobs-btn"
+                onClick={handleScrape}
+                disabled={scraping || loading}
+                title="Refresh jobs from LinkedIn, Indeed & all sources"
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "7px 14px", borderRadius: 9,
+                  background: scraping ? (dark ? "#1F2D45" : "#EFF6FF") : (dark ? "#1A2535" : "#F8FAFC"),
+                  border: `1.5px solid ${dark ? "#1F2D45" : "#E4E8F0"}`,
+                  color: scraping ? "#2563EB" : dark ? "#94A3B8" : "#475569",
+                  fontWeight: 600, fontSize: 12, fontFamily: "inherit", cursor: scraping ? "wait" : "pointer",
+                  transition: "all 0.2s", whiteSpace: "nowrap",
+                }}
+              >
+                <span style={{
+                  display: "inline-block",
+                  animation: scraping ? "spin 1s linear infinite" : "none",
+                  lineHeight: 1,
+                }}>&#x21BB;</span>
+                {scraping ? "Refreshing…" : "Refresh Jobs"}
+              </button>
+            </div>
+
+            {/* Sort */}
+            <div style={{ position: "relative" }}>
+              <button
+                id="sort-dropdown-btn"
+                aria-haspopup="listbox"
+                aria-expanded={sortOpen}
+                onClick={() => setSortOpen(o => !o)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "8px 14px", borderRadius: 9,
+                  background: surface, border: `1.5px solid ${border}`,
+                  color: dark ? "#94A3B8" : "#475569",
+                  fontWeight: 500, fontSize: 13, fontFamily: "inherit", cursor: "pointer",
+                }}
+              >
+                <span>Sort: <strong style={{ color: text1 }}>{sort}</strong></span>
+                <ChevronDown size={13} style={{ transform: sortOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
+              </button>
+              {sortOpen && (
+                <>
+                  <div style={{ position: "fixed", inset: 0, zIndex: 5 }} onClick={() => setSortOpen(false)} />
+                  <div style={{
+                    position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 10,
+                    background: surface, border: `1px solid ${border}`, borderRadius: 12,
+                    boxShadow: "0 8px 30px rgba(0,0,0,0.12)", minWidth: 170, overflow: "hidden",
+                    animation: "fadeUp 0.15s ease both",
+                  }} role="listbox">
+                    {SORT_OPTIONS.map(opt => (
+                      <button
+                        key={opt}
+                        role="option"
+                        aria-selected={sort === opt}
+                        onClick={() => { setSort(opt); setSortOpen(false); }}
+                        style={{
+                          display: "block", width: "100%", padding: "10px 16px", textAlign: "left",
+                          background: sort === opt ? (dark ? "rgba(37,99,235,0.15)" : "#EFF6FF") : "transparent",
+                          color: sort === opt ? "#2563EB" : dark ? "#94A3B8" : "#475569",
+                          fontWeight: sort === opt ? 700 : 400,
+                          fontSize: 13, border: "none", cursor: "pointer", fontFamily: "inherit",
+                        }}
+                        onMouseEnter={e => { if (sort !== opt) (e.currentTarget as HTMLElement).style.background = dark ? "#1A2535" : "#F8FAFC"; }}
+                        onMouseLeave={e => { if (sort !== opt) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Active filter pills */}
+          {Object.values(filters).flat().length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+              {Object.entries(filters).flatMap(([key, vals]) =>
+                (vals as string[]).map(v => (
+                  <span key={`${key}-${v}`} style={{
+                    display: "inline-flex", alignItems: "center", gap: 5,
+                    padding: "4px 10px 4px 12px", borderRadius: 999,
+                    background: "#EFF6FF", color: "#2563EB",
+                    border: "1.5px solid #BFDBFE",
+                    fontSize: 12, fontWeight: 600,
+                  }}>
+                    {v}
+                    <button
+                      onClick={() => setFilters(f => ({ ...f, [key]: (f[key as keyof Filters]).filter(x => x !== v) }))}
+                      style={{
+                        background: "none", border: "none", cursor: "pointer",
+                        color: "#93C5FD", padding: 0, display: "flex",
+                      }}
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* Error */}
+          {error && (
+            <div style={{
+              background: dark ? "rgba(220,38,38,0.1)" : "#FEF2F2",
+              border: `1px solid ${dark ? "rgba(220,38,38,0.2)" : "#FCA5A5"}`,
+              borderRadius: 12, padding: "14px 18px", marginBottom: 14,
+              fontSize: 13.5, color: dark ? "#F87171" : "#B91C1C", fontWeight: 500,
+            }} role="alert">
+              ⚠️ {error}
+            </div>
+          )}
+
+          {/* Skeletons */}
+          {loading && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {Array.from({ length: 5 }).map((_, i) => <JobCardSkeleton key={i} dark={dark} />)}
+            </div>
+          )}
+
+          {/* Empty state */}
+          {!loading && !error && visibleJobs.length === 0 && (
+            <div style={{
+              background: surface, border: `1px solid ${border}`, borderRadius: 16,
+              padding: "60px 32px", display: "flex", flexDirection: "column",
+              alignItems: "center", textAlign: "center", gap: 12,
+            }}>
+              <div style={{
+                width: 60, height: 60, borderRadius: "50%",
+                background: dark ? "rgba(37,99,235,0.15)" : "#EFF6FF",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <Search size={26} color="#2563EB" />
+              </div>
+              <h2 style={{ fontWeight: 700, fontSize: 16, color: text1, margin: 0 }}>No jobs found</h2>
+              <p style={{ color: text3, fontSize: 14, margin: 0 }}>Try adjusting your search or clearing filters</p>
+              <button
+                onClick={() => { setFilters(EMPTY_FILTERS); setPendingQuery(""); setSearchQuery(""); fetchJobs(""); }}
+                style={{
+                  marginTop: 4, padding: "10px 22px",
+                  background: "linear-gradient(135deg,#2563EB,#1D4ED8)",
+                  color: "#fff", border: "none", borderRadius: 10,
+                  fontWeight: 700, fontSize: 14, fontFamily: "inherit", cursor: "pointer",
+                }}
+              >
+                Clear all filters
+              </button>
+            </div>
+          )}
+
+          {/* Job list */}
+          {!loading && !error && visibleJobs.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {visibleJobs.map((job, i) => (
+                <JobCard
+                  key={job.id}
+                  job={job}
+                  isBookmarked={bookmarks.has(job.id)}
+                  onBookmark={toggleBookmark}
+                  onClick={openJob}
+                  index={i}
+                />
+              ))}
+            </div>
+          )}
+        </main>
+
+        {/* Right sidebar */}
+        <div style={{ position: "sticky", top: 84 }} id="right-sidebar">
+          <RightSidebar jobs={allJobs} recentlyViewed={recentlyViewed} onJobClick={openJob} />
+        </div>
+      </div>
+
+      {/* Mobile nav */}
+      <MobileNav onFilterOpen={() => setDrawerOpen(true)} savedCount={bookmarks.size} />
+
+      {/* Mobile drawer */}
+      {drawerOpen && (
+        <>
+          <div
+            onClick={() => setDrawerOpen(false)}
+            style={{
+              position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
+              zIndex: 40, backdropFilter: "blur(3px)", animation: "fadeIn 0.2s ease",
+            }}
+          />
+          <div style={{
+            position: "fixed", top: 0, left: 0, bottom: 0, width: 300,
+            background: surface, borderRight: `1px solid ${border}`,
+            zIndex: 50, overflowY: "auto", animation: "slide-left 0.25s ease",
+          }}>
+            <FilterSidebar
+              filters={filters}
+              onChange={setFilters}
+              onApply={handleSearch}
+              isDrawer
+              onClose={() => setDrawerOpen(false)}
+            />
+          </div>
+        </>
+      )}
+
+      {/* Job detail */}
+      {selectedJob && (
+        <JobDetailPanel
+          job={selectedJob}
+          isBookmarked={bookmarks.has(selectedJob.id)}
+          onBookmark={toggleBookmark}
+          onClose={() => setSelectedJob(null)}
+          similarJobs={similarJobs}
+          onSimilarClick={openJob}
+        />
+      )}
+
+      {/* Responsive styles */}
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @media (max-width: 1200px) {
+          #main-grid { grid-template-columns: 240px 1fr !important; }
+          #right-sidebar { display: none !important; }
+        }
+        @media (max-width: 768px) {
+          #main-grid { grid-template-columns: 1fr !important; padding: 16px 14px 80px !important; }
+          #left-sidebar { display: none !important; }
+          #mobile-filter-btn { display: inline-flex !important; }
+        }
+        @media (min-width: 769px) {
+          nav.mobile-nav { display: none !important; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <ThemeProvider>
+      <PageContent />
+    </ThemeProvider>
+  );
+}
