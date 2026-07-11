@@ -15,14 +15,3 @@ services:
         sync: false
       - key: RAPIDAPI_KEY
         sync: false
-
-  - type: web
-    name: careerlens-frontend
-    env: node
-    region: frankfurt
-    buildCommand: "npm install && npm run build"
-    startCommand: "npm run start"
-    rootDir: frontend
-    envVars:
-      - key: NEXT_PUBLIC_API_URL
-        sync: false
