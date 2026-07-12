@@ -25,6 +25,13 @@ async def main():
     elif pg_url.startswith("postgresql://"):
         pg_url = pg_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
+    # asyncpg expects 'ssl=require' instead of 'sslmode=require'
+    pg_url = pg_url.replace("sslmode=require", "ssl=require")
+    # asyncpg doesn't support 'channel_binding'
+    pg_url = pg_url.replace("&channel_binding=require", "")
+    pg_url = pg_url.replace("?channel_binding=require&", "?")
+    pg_url = pg_url.replace("?channel_binding=require", "")
+
     pg_engine = create_async_engine(pg_url, echo=False)
     PgSession = async_sessionmaker(pg_engine, expire_on_commit=False)
 
@@ -67,7 +74,7 @@ async def main():
         
         await session.commit()
     
-    print(f"Migration complete! Inserted {inserted_count} new jobs into Supabase.")
+    print(f"Migration complete! Inserted {inserted_count} new jobs into Postgres.")
 
 if __name__ == "__main__":
     asyncio.run(main())
