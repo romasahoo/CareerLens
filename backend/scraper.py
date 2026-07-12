@@ -154,7 +154,7 @@ async def fetch_jobs(session: AsyncSession):
                 remote=job.get("remote", False),
                 url=job.get("url", ""),
                 source="Arbeitnow",
-                posted_date=datetime.now(timezone.utc)
+                posted_date=datetime.utcnow()
             )
             session.add(new_job)
             await session.flush()
@@ -249,7 +249,7 @@ async def fetch_rapidapi_jobs(session: AsyncSession):
                         remote="remote" in str(job.get("location_type", "")).lower(),
                         url=url_link,
                         source="RapidAPI (Active Jobs DB)",
-                        posted_date=datetime.now(timezone.utc)
+                        posted_date=datetime.utcnow()
                     )
                     session.add(new_job)
                     await session.flush()
@@ -372,7 +372,7 @@ async def fetch_jsearch_jobs(session: AsyncSession):
                         remote=is_remote,
                         url=url_link,
                         source=source_label,
-                        posted_date=datetime.now(timezone.utc),
+                        posted_date=datetime.utcnow(),
                     )
                     session.add(new_job)
                     await session.flush()
@@ -439,7 +439,7 @@ async def fetch_linkedin_direct_jobs(session: AsyncSession):
                     remote="remote" in location.lower(),
                     url=url_link,
                     source="LinkedIn",
-                    posted_date=datetime.now(timezone.utc)
+                    posted_date=datetime.utcnow()
                 )
                 session.add(new_job)
                 await session.flush()
