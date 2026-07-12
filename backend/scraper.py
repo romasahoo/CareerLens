@@ -452,7 +452,7 @@ async def fetch_linkedin_direct_jobs(session: AsyncSession):
 # ── Remotive API ─────────────────────────────────────────────────────────────
 
 async def fetch_remotive_jobs(session: AsyncSession):
-    url = "https://remotive.com/api/remote-jobs?category=software-dev&limit=100"
+    url = "https://remotive.com/api/remote-jobs?search=python"
     try:
         response = requests.get(url, timeout=15)
         if response.status_code != 200:
@@ -481,11 +481,12 @@ async def fetch_remotive_jobs(session: AsyncSession):
             if not is_english_job(title):
                 continue
                 
-            if not any(k in lower_title for k in BACKEND_ROLE_KEYWORDS):
-                continue
-                
+            # Require Python keyword (since it's a Python board)
             if not any(k in combined for k in PYTHON_KEYWORDS):
                 continue
+                
+            # If not explicitly a backend role, at least ensure it's not a frontend/unrelated role
+            # (Handled by EXCLUDE_KEYWORDS below)
                 
             if any(k in lower_title for k in EXCLUDE_KEYWORDS):
                 continue
@@ -514,7 +515,7 @@ async def fetch_remotive_jobs(session: AsyncSession):
 # ── RemoteOK API ─────────────────────────────────────────────────────────────
 
 async def fetch_remoteok_jobs(session: AsyncSession):
-    url = "https://remoteok.com/api"
+    url = "https://remoteok.com/api?tag=python"
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     try:
         response = requests.get(url, headers=headers, timeout=15)
@@ -543,11 +544,12 @@ async def fetch_remoteok_jobs(session: AsyncSession):
             if not is_english_job(title):
                 continue
                 
-            if not any(k in lower_title for k in BACKEND_ROLE_KEYWORDS):
-                continue
-                
+            # Require Python keyword (since it's a Python board)
             if not any(k in combined for k in PYTHON_KEYWORDS):
                 continue
+                
+            # If not explicitly a backend role, at least ensure it's not a frontend/unrelated role
+            # (Handled by EXCLUDE_KEYWORDS below)
                 
             if any(k in lower_title for k in EXCLUDE_KEYWORDS):
                 continue
