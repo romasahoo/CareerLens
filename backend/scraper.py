@@ -449,6 +449,130 @@ async def fetch_linkedin_direct_jobs(session: AsyncSession):
     except Exception as e:
         print(f"LinkedIn Direct Scraper error: {e}")
 
+# ── Remotive API ─────────────────────────────────────────────────────────────
+
+async def fetch_remotive_jobs(session: AsyncSession):
+    url = "https://remotive.com/api/remote-jobs?category=software-dev&limit=100"
+    try:
+        response = requests.get(url, timeout=15)
+        if response.status_code != 200:
+            print(f"Remotive API error: {response.status_code}")
+            return
+            
+        jobs = response.json().get("jobs", [])
+        print(f"Remotive: Found {len(jobs)} jobs")
+        
+        for job in jobs:
+            title = job.get("title", "")
+            company = job.get("company_name", "")
+            url_link = job.get("url", "")
+            location = job.get("candidate_required_location", "Remote")
+            description = str(job.get("description", "")).lower()
+            job_type = str(job.get("job_type", "Full-time")).capitalize().replace("_", "-")
+            if not job_type:
+                job_type = "Full-time"
+            
+            if not title or not url_link:
+                continue
+
+            lower_title = title.lower()
+            combined = lower_title + " " + description
+
+            if not is_english_job(title):
+                continue
+                
+            if not any(k in lower_title for k in BACKEND_ROLE_KEYWORDS):
+                continue
+                
+            if not any(k in combined for k in PYTHON_KEYWORDS):
+                continue
+                
+            if any(k in lower_title for k in EXCLUDE_KEYWORDS):
+                continue
+
+            stmt = select(Job).where(Job.url == url_link)
+            result = await session.execute(stmt)
+            if not result.scalar_one_or_none():
+                new_job = Job(
+                    title=title,
+                    company=company,
+                    location=location,
+                    job_type=job_type,
+                    remote=True,
+                    url=url_link,
+                    source="Remotive",
+                    posted_date=datetime.utcnow()
+                )
+                session.add(new_job)
+                await session.flush()
+                await create_notifications_for_job(session, new_job)
+                
+        await session.commit()
+    except Exception as e:
+        print(f"Remotive error: {e}")
+
+# ── RemoteOK API ─────────────────────────────────────────────────────────────
+
+async def fetch_remoteok_jobs(session: AsyncSession):
+    url = "https://remoteok.com/api"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    try:
+        response = requests.get(url, headers=headers, timeout=15)
+        if response.status_code != 200:
+            print(f"RemoteOK API error: {response.status_code}")
+            return
+            
+        data = response.json()
+        jobs = [j for j in data if isinstance(j, dict) and "id" in j and "slug" in j]
+        print(f"RemoteOK: Found {len(jobs)} jobs")
+        
+        for job in jobs:
+            title = job.get("position", "")
+            company = job.get("company", "")
+            url_link = job.get("url", "")
+            location = job.get("location", "Remote")
+            description = str(job.get("description", "")).lower()
+            job_type = "Full-time"
+            
+            if not title or not url_link:
+                continue
+
+            lower_title = title.lower()
+            combined = lower_title + " " + description
+
+            if not is_english_job(title):
+                continue
+                
+            if not any(k in lower_title for k in BACKEND_ROLE_KEYWORDS):
+                continue
+                
+            if not any(k in combined for k in PYTHON_KEYWORDS):
+                continue
+                
+            if any(k in lower_title for k in EXCLUDE_KEYWORDS):
+                continue
+
+            stmt = select(Job).where(Job.url == url_link)
+            result = await session.execute(stmt)
+            if not result.scalar_one_or_none():
+                new_job = Job(
+                    title=title,
+                    company=company,
+                    location=location,
+                    job_type=job_type,
+                    remote=True,
+                    url=url_link,
+                    source="RemoteOK",
+                    posted_date=datetime.utcnow()
+                )
+                session.add(new_job)
+                await session.flush()
+                await create_notifications_for_job(session, new_job)
+                
+        await session.commit()
+    except Exception as e:
+        print(f"RemoteOK error: {e}")
+
 # ── Entry point ────────────────────────────────────────────────────────────────
 
 async def run_scrapers():
@@ -461,6 +585,10 @@ async def run_scrapers():
         await fetch_linkedin_direct_jobs(session)
         print("Fetching from JSearch (LinkedIn/Indeed/Glassdoor)...")
         await fetch_jsearch_jobs(session)
+        print("Fetching from Remotive...")
+        await fetch_remotive_jobs(session)
+        print("Fetching from RemoteOK...")
+        await fetch_remoteok_jobs(session)
         print("All scrapers done.")
 
 if __name__ == "__main__":
