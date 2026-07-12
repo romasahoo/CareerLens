@@ -10,15 +10,16 @@ headers = {
 }
 
 params = {
-    "query": "Python Backend Engineer Munich",
+    "query": "Python Backend Engineer LinkedIn Germany",
     "page": "1",
     "num_pages": "1",
     "date_posted": "week",
     "country": "de",
 }
 
+print("Testing /search-v2 endpoint...")
 response = requests.get(
-    f"https://{jsearch_host}/search-v2", # wait, scraper.py uses /search-v2, let's try /search or /search-v2
+    "https://jsearch.p.rapidapi.com/search-v2",
     headers=headers,
     params=params,
     timeout=15,

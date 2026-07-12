@@ -1,5 +1,6 @@
 import asyncio
 import requests
+from bs4 import BeautifulSoup
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import datetime, timezone
@@ -383,6 +384,71 @@ async def fetch_jsearch_jobs(session: AsyncSession):
             print(f"JSearch error for '{query}': {e}")
 
 
+# ── LinkedIn Direct Scraper ───────────────────────────────────────────────────
+
+async def fetch_linkedin_direct_jobs(session: AsyncSession):
+    url = "https://www.linkedin.com/jobs/search?keywords=Python%20Backend&location=Germany&geoId=101282230&trk=public_jobs_jobs-search-bar_search-submit&position=1&pageNum=0"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+    }
+    try:
+        response = requests.get(url, headers=headers, timeout=15)
+        if response.status_code != 200:
+            print(f"LinkedIn Direct Scraper error: {response.status_code}")
+            return
+            
+        soup = BeautifulSoup(response.text, "html.parser")
+        job_cards = soup.find_all("div", class_="base-card")
+        
+        print(f"LinkedIn Direct: Found {len(job_cards)} job cards")
+        
+        for card in job_cards:
+            link_tag = card.find("a", class_="base-card__full-link")
+            if not link_tag:
+                continue
+            url_link = link_tag.get("href", "").split("?")[0]
+            
+            title_tag = card.find("h3", class_="base-search-card__title")
+            title = title_tag.text.strip() if title_tag else ""
+            
+            company_tag = card.find("h4", class_="base-search-card__subtitle")
+            company = company_tag.text.strip() if company_tag else ""
+            
+            location_tag = card.find("span", class_="job-search-card__location")
+            location = location_tag.text.strip() if location_tag else "Germany"
+            
+            # Simple keyword matching on the title
+            lower_title = title.lower()
+            if not any(k in lower_title for k in BACKEND_ROLE_KEYWORDS) and not any(k in lower_title for k in PYTHON_KEYWORDS):
+                continue
+                
+            if any(k in lower_title for k in EXCLUDE_KEYWORDS):
+                continue
+                
+            if not is_english_job(title):
+                continue
+
+            stmt = select(Job).where(Job.url == url_link)
+            result = await session.execute(stmt)
+            if not result.scalar_one_or_none():
+                new_job = Job(
+                    title=title,
+                    company=company,
+                    location=location,
+                    job_type="Full-time",
+                    remote="remote" in location.lower(),
+                    url=url_link,
+                    source="LinkedIn",
+                    posted_date=datetime.now(timezone.utc)
+                )
+                session.add(new_job)
+                await session.flush()
+                await create_notifications_for_job(session, new_job)
+                
+        await session.commit()
+    except Exception as e:
+        print(f"LinkedIn Direct Scraper error: {e}")
+
 # ── Entry point ────────────────────────────────────────────────────────────────
 
 async def run_scrapers():
@@ -391,6 +457,8 @@ async def run_scrapers():
         await fetch_jobs(session)
         print("Fetching from RapidAPI Active Jobs DB...")
         await fetch_rapidapi_jobs(session)
+        print("Fetching from LinkedIn Direct...")
+        await fetch_linkedin_direct_jobs(session)
         print("Fetching from JSearch (LinkedIn/Indeed/Glassdoor)...")
         await fetch_jsearch_jobs(session)
         print("All scrapers done.")
