@@ -33,6 +33,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+async def root():
+    return {
+        "status": "online",
+        "message": "CareerLens API is running!",
+        "docs": "/docs"
+    }
+
 @app.get("/api/jobs", response_model=list[JobResponse])
 async def get_jobs(
     q: str = None,
