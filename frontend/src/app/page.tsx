@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { SlidersHorizontal, ChevronDown, Search, X } from "lucide-react";
+import { SlidersHorizontal, ChevronDown, Search, X, BookmarkPlus } from "lucide-react";
+import { useSession } from "next-auth/react";
 
 import { ThemeProvider, useTheme } from "@/components/ThemeContext";
 import Navbar from "@/components/Navbar";
@@ -100,6 +101,9 @@ function PageContent() {
   const [recentlyViewed, setRecentlyViewed] = useState<Job[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [scraping, setScraping] = useState(false);
+  
+  const { data: session } = useSession();
+  const [savingSearch, setSavingSearch] = useState(false);
 
   const fetchJobs = useCallback(async (q = "") => {
     setLoading(true);
@@ -148,6 +152,37 @@ function PageContent() {
       // scrape error — silently ignore, fetchJobs will handle backend errors
     } finally {
       setScraping(false);
+    }
+  };
+
+  const handleSaveSearch = async () => {
+    if (!session) {
+      alert("Please sign in to save a search filter.");
+      return;
+    }
+    setSavingSearch(true);
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+      const res = await fetch(`${baseUrl}/api/filters`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${(session as any).provider}|${(session as any).accessToken}`
+        },
+        body: JSON.stringify({
+          query: searchQuery,
+          locations: filters.locations,
+          types: filters.types,
+          sources: filters.sources,
+          language: filters.language
+        })
+      });
+      if (res.ok) alert("Search saved! You'll be notified of new matches.");
+      else alert("Failed to save search.");
+    } catch (e) {
+      alert("Error saving search.");
+    } finally {
+      setSavingSearch(false);
     }
   };
 
@@ -262,6 +297,26 @@ function PageContent() {
                   lineHeight: 1,
                 }}>&#x21BB;</span>
                 {scraping ? "Refreshing…" : "Refresh Jobs"}
+              </button>
+              
+              <button
+                onClick={handleSaveSearch}
+                disabled={savingSearch}
+                title="Save this search to get notifications for new matches"
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "7px 14px", borderRadius: 9,
+                  background: savingSearch ? (dark ? "#1F2D45" : "#EFF6FF") : "transparent",
+                  border: `1.5px solid ${dark ? "#1F2D45" : "#E4E8F0"}`,
+                  color: savingSearch ? "#2563EB" : dark ? "#94A3B8" : "#475569",
+                  fontWeight: 600, fontSize: 12, fontFamily: "inherit", cursor: savingSearch ? "wait" : "pointer",
+                  transition: "all 0.2s", whiteSpace: "nowrap",
+                }}
+                onMouseEnter={e => { if(!savingSearch) (e.currentTarget as HTMLElement).style.background = dark ? "#1A2535" : "#F8FAFC"; }}
+                onMouseLeave={e => { if(!savingSearch) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+              >
+                <BookmarkPlus size={14} />
+                {savingSearch ? "Saving..." : "Save Search"}
               </button>
             </div>
 

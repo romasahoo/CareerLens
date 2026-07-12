@@ -6,8 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from database import get_db, engine, Base
-from models import Job
-from schemas import JobResponse
+from models import Job, User, UserFilter, Notification
+from schemas import JobResponse, UserFilterCreate, NotificationResponse
+from auth import get_current_user
 from scraper import run_scrapers
 
 @asynccontextmanager
@@ -74,3 +75,31 @@ async def trigger_scrape():
         return {"status": "ok", "message": "Scrape completed successfully"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+@app.post("/api/filters")
+async def save_filter(
+    filter_data: UserFilterCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    new_filter = UserFilter(
+        user_id=current_user.id,
+        query=filter_data.query,
+        locations=filter_data.locations,
+        types=filter_data.types,
+        sources=filter_data.sources,
+        language=filter_data.language
+    )
+    db.add(new_filter)
+    await db.commit()
+    return {"status": "ok", "message": "Filter saved"}
+
+@app.get("/api/notifications", response_model=list[NotificationResponse])
+async def get_notifications(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = select(Notification).where(Notification.user_id == current_user.id).order_by(Notification.created_at.desc())
+    result = await db.execute(stmt)
+    notifications = result.scalars().all()
+    return notifications

@@ -6,6 +6,8 @@ export const metadata: Metadata = {
   description: "The smartest job board for software engineers. Aggregated Python, FastAPI, Django, and backend engineering jobs from top platforms in Munich and beyond.",
 };
 
+import { Providers } from "./providers";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -21,7 +23,9 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body style={{ margin: 0, padding: 0 }}>{children}</body>
+      <body style={{ margin: 0, padding: 0 }}>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

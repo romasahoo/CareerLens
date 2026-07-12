@@ -3,7 +3,7 @@ import requests
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import datetime, timezone
-from models import Job
+from models import Job, UserFilter, Notification
 from database import AsyncSessionLocal
 from dotenv import load_dotenv
 
@@ -62,6 +62,36 @@ def is_english_job(title: str, description: str = "") -> bool:
         if word in lower_title:
             return False
     return True
+
+async def create_notifications_for_job(session: AsyncSession, job: Job):
+    stmt = select(UserFilter)
+    result = await session.execute(stmt)
+    filters = result.scalars().all()
+    
+    for f in filters:
+        # Match query
+        if f.query and f.query.lower() not in job.title.lower() and f.query.lower() not in job.company.lower():
+            continue
+            
+        # Match location
+        if f.locations:
+            loc = (job.location or "").lower()
+            loc_match = False
+            for l in f.locations:
+                if l == "Remote" and job.remote: loc_match = True
+                elif l == "Munich" and ("munich" in loc or "münchen" in loc): loc_match = True
+                elif l == "Berlin" and "berlin" in loc: loc_match = True
+                elif l == "Hybrid" and "hybrid" in loc: loc_match = True
+                elif l.lower() in loc: loc_match = True
+            if not loc_match:
+                continue
+                
+        notif = Notification(
+            user_id=f.user_id,
+            job_id=job.id,
+            message=f"New match: {job.title} at {job.company}"
+        )
+        session.add(notif)
 
 
 # ── Arbeitnow ─────────────────────────────────────────────────────────────────
@@ -126,6 +156,8 @@ async def fetch_jobs(session: AsyncSession):
                 posted_date=datetime.now(timezone.utc)
             )
             session.add(new_job)
+            await session.flush()
+            await create_notifications_for_job(session, new_job)
     await session.commit()
 
 
@@ -219,6 +251,8 @@ async def fetch_rapidapi_jobs(session: AsyncSession):
                         posted_date=datetime.now(timezone.utc)
                     )
                     session.add(new_job)
+                    await session.flush()
+                    await create_notifications_for_job(session, new_job)
             await session.commit()
     except Exception as e:
         print(f"Error fetching from RapidAPI Active Jobs DB: {e}")
@@ -340,6 +374,8 @@ async def fetch_jsearch_jobs(session: AsyncSession):
                         posted_date=datetime.now(timezone.utc),
                     )
                     session.add(new_job)
+                    await session.flush()
+                    await create_notifications_for_job(session, new_job)
 
             await session.commit()
 

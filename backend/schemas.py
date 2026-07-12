@@ -20,3 +20,18 @@ class JobResponse(JobBase):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+class UserFilterCreate(BaseModel):
+    query: str = ""
+    locations: list[str] = []
+    types: list[str] = []
+    sources: list[str] = []
+    language: list[str] = []
+
+class NotificationResponse(BaseModel):
+    id: int
+    message: str
+    is_read: bool
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)

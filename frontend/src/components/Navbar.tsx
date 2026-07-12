@@ -1,7 +1,8 @@
 "use client";
 import { Search, Bell, Sun, Moon, ChevronDown, Zap } from "lucide-react";
 import { useTheme } from "./ThemeContext";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSession, signIn, signOut } from "next-auth/react";
 
 interface NavbarProps {
   searchQuery: string;
@@ -11,7 +12,30 @@ interface NavbarProps {
 
 export default function Navbar({ searchQuery, onSearchChange, onSearchSubmit }: NavbarProps) {
   const { theme, toggleTheme } = useTheme();
+  const { data: session } = useSession();
   const [focused, setFocused] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (session) {
+      const fetchNotifs = async () => {
+        try {
+          const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+          const res = await fetch(`${baseUrl}/api/notifications`, {
+            headers: {
+              "Authorization": `Bearer ${(session as any).provider}|${(session as any).accessToken}`
+            }
+          });
+          if (res.ok) setNotifications(await res.json());
+        } catch (e) {}
+      };
+      fetchNotifs();
+    }
+  }, [session]);
+
+  const unreadCount = notifications.filter(n => !n.is_read).length;
   const dark = theme === "dark";
 
   const nav: React.CSSProperties = {
@@ -132,20 +156,56 @@ export default function Navbar({ searchQuery, onSearchChange, onSearchSubmit }: 
 
         {/* Right actions */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <button
-            id="nav-notifications"
-            aria-label="Notifications"
-            style={{ ...iconBtn, position: "relative" }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = dark ? "#1F2D45" : "#F0F4FF"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-          >
-            <Bell size={17} />
-            <span style={{
-              position: "absolute", top: 7, right: 7,
-              width: 7, height: 7, borderRadius: "50%", background: "#EF4444",
-              border: `2px solid ${dark ? "#111827" : "#fff"}`,
-            }} />
-          </button>
+          <div style={{ position: "relative" }}>
+            <button
+              id="nav-notifications"
+              aria-label="Notifications"
+              onClick={() => {
+                if (!session) return alert("Please sign in to view notifications");
+                setNotificationsOpen(!notificationsOpen);
+              }}
+              style={{ ...iconBtn }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = dark ? "#1F2D45" : "#F0F4FF"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+            >
+              <Bell size={17} />
+              {unreadCount > 0 && (
+                <span style={{
+                  position: "absolute", top: 7, right: 7,
+                  width: 7, height: 7, borderRadius: "50%", background: "#EF4444",
+                  border: `2px solid ${dark ? "#111827" : "#fff"}`,
+                }} />
+              )}
+            </button>
+
+            {notificationsOpen && (
+              <div style={{
+                position: "absolute", top: "100%", right: 0, marginTop: 8,
+                background: dark ? "#111827" : "#fff",
+                border: `1px solid ${dark ? "#1F2D45" : "#E4E8F0"}`,
+                borderRadius: 12, boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
+                width: 280, zIndex: 10, maxHeight: 300, overflowY: "auto"
+              }}>
+                <div style={{ padding: "10px 14px", borderBottom: `1px solid ${dark ? "#1F2D45" : "#E4E8F0"}`, fontWeight: 600, fontSize: 14, color: dark ? "#E2E8F0" : "#0F172A" }}>
+                  Notifications
+                </div>
+                {notifications.length === 0 ? (
+                  <div style={{ padding: 20, textAlign: "center", fontSize: 13, color: dark ? "#94A3B8" : "#64748B" }}>
+                    No new notifications
+                  </div>
+                ) : (
+                  notifications.map(n => (
+                    <div key={n.id} style={{
+                      padding: "10px 14px", borderBottom: `1px solid ${dark ? "#1F2D45" : "#E4E8F0"}`,
+                      background: n.is_read ? "transparent" : (dark ? "rgba(37,99,235,0.1)" : "#EFF6FF")
+                    }}>
+                      <div style={{ fontSize: 13, color: dark ? "#E2E8F0" : "#0F172A", marginBottom: 4 }}>{n.message}</div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
 
           <button
             id="nav-theme-toggle"
@@ -160,27 +220,82 @@ export default function Navbar({ searchQuery, onSearchChange, onSearchSubmit }: 
 
           <div style={{ width: 1, height: 26, background: dark ? "#1F2D45" : "#E4E8F0" }} />
 
-          <button
-            id="nav-profile"
-            aria-label="User profile"
-            style={{
-              display: "flex", alignItems: "center", gap: 7,
-              background: "none", border: "none", cursor: "pointer", padding: "4px 8px 4px 4px",
-              borderRadius: 10, transition: "background 0.15s",
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = dark ? "#1F2D45" : "#F0F4FF"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "none"; }}
-          >
-            <div style={{
-              width: 34, height: 34, borderRadius: "50%",
-              background: "linear-gradient(135deg, #2563EB, #7C3AED)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: "#fff", fontWeight: 800, fontSize: 12, letterSpacing: 0.5,
-            }}>
-              JD
+          {session ? (
+            <div style={{ position: "relative" }}>
+              <button
+                id="nav-profile"
+                aria-label="User profile"
+                onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 7,
+                  background: "none", border: "none", cursor: "pointer", padding: "4px 8px 4px 4px",
+                  borderRadius: 10, transition: "background 0.15s",
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = dark ? "#1F2D45" : "#F0F4FF"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "none"; }}
+              >
+                {session.user?.image ? (
+                  <img src={session.user.image} alt="Avatar" style={{ width: 34, height: 34, borderRadius: "50%" }} />
+                ) : (
+                  <div style={{
+                    width: 34, height: 34, borderRadius: "50%",
+                    background: "linear-gradient(135deg, #2563EB, #7C3AED)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    color: "#fff", fontWeight: 800, fontSize: 12, letterSpacing: 0.5,
+                  }}>
+                    {session.user?.name?.substring(0, 2).toUpperCase() || "U"}
+                  </div>
+                )}
+                <ChevronDown size={13} color={dark ? "#94A3B8" : "#64748B"} />
+              </button>
+              
+              {profileMenuOpen && (
+                <div style={{
+                  position: "absolute", top: "100%", right: 0, marginTop: 8,
+                  background: dark ? "#111827" : "#fff",
+                  border: `1px solid ${dark ? "#1F2D45" : "#E4E8F0"}`,
+                  borderRadius: 12, boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
+                  padding: 8, minWidth: 160, zIndex: 10
+                }}>
+                  <div style={{ padding: "8px 12px", borderBottom: `1px solid ${dark ? "#1F2D45" : "#E4E8F0"}`, marginBottom: 4 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: dark ? "#fff" : "#0F172A" }}>{session.user?.name}</div>
+                    <div style={{ fontSize: 12, color: dark ? "#94A3B8" : "#64748B" }}>{session.user?.email}</div>
+                  </div>
+                  <button
+                    onClick={() => signOut()}
+                    style={{
+                      width: "100%", textAlign: "left", padding: "8px 12px",
+                      background: "none", border: "none", cursor: "pointer",
+                      fontSize: 14, color: "#EF4444", borderRadius: 6
+                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = dark ? "#1F2D45" : "#FEE2E2"; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "none"; }}
+                  >
+                    Sign out
+                  </button>
+                </div>
+              )}
             </div>
-            <ChevronDown size={13} color={dark ? "#94A3B8" : "#64748B"} />
-          </button>
+          ) : (
+            <button
+              onClick={() => signIn()}
+              style={{
+                background: "transparent",
+                color: dark ? "#E2E8F0" : "#0F172A",
+                border: `1.5px solid ${dark ? "#1F2D45" : "#E4E8F0"}`,
+                borderRadius: 999,
+                padding: "8px 16px",
+                fontWeight: 600,
+                fontSize: 14,
+                cursor: "pointer",
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = dark ? "#1F2D45" : "#F8FAFC"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+            >
+              Sign In
+            </button>
+          )}
         </div>
       </div>
     </header>
