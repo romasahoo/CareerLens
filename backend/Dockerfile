@@ -7,4 +7,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Command is set in docker-compose.yml
+# Command is set here so it can run on Render or other container platforms without docker-compose
+CMD bash -c "alembic upgrade head && uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000}"
