@@ -3,11 +3,17 @@
 import { signIn } from "next-auth/react";
 import { Zap } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 
 function LoginContent() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/";
+
+  useEffect(() => {
+    if (window.location.search) {
+      window.history.replaceState(null, "", "/login");
+    }
+  }, []);
 
   return (
     <div style={{
